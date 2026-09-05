@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Valley Rock — AI Safari Consultant Widget</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;1,500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1C1B18; --ink-soft:#2A2823;
+    --gold:#D9A441; --gold-deep:#B8842A;
+    --sand:#F1E6D3; --sand-bubble:#FBF6EE;
+    --sage:#4F6552; --text-dark:#232220;
+    --text-muted-onink:#C9BFA9;
+  }
+  *{box-sizing:border-box;}
+  html,body{ height:100%; margin:0; }
+  body{ background:#0F0E0C; font-family:'Manrope',sans-serif; }
+  .fake-page{ max-width:640px; margin:0 auto; padding:60px 24px; color:#5c574c; }
+  .fake-page h1{ font-family:'Fraunces',serif; color:#E9E1D2; font-weight:500; }
+
+  .bubble{
+    position:fixed; bottom:24px; right:24px; z-index:10;
+    width:66px; height:66px; border-radius:50%; border:none; padding:0;
+    background:linear-gradient(155deg, var(--ink-soft), var(--ink));
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 8px 24px rgba(217,164,65,0.28), 0 2px 6px rgba(0,0,0,.4);
+    cursor:pointer;
+    transition:opacity .18s ease, transform .18s ease;
+  }
+  .bubble::before{ content:''; position:absolute; inset:-6px; border-radius:50%; border:1.5px solid rgba(217,164,65,0.45); animation:breathe 2.8s ease-in-out infinite; }
+  @keyframes breathe{ 0%,100%{transform:scale(1);opacity:.55;} 50%{transform:scale(1.12);opacity:0;} }
+  @media (prefers-reduced-motion:reduce){ .bubble::before{ animation:none; } }
+  .bubble svg{ width:26px; height:26px; }
+  .bubble.is-hidden{ opacity:0; transform:scale(.85); pointer-events:none; }
+
+  .panel{
+    position:fixed; bottom:24px; right:24px; z-index:10;
+    width:380px; max-width:calc(100vw - 32px); height:580px; max-height:82vh;
+    background:var(--sand); border-radius:24px; overflow:hidden;
+    display:flex; flex-direction:column;
+    box-shadow:0 24px 60px rgba(0,0,0,.45);
+    transform-origin:bottom right;
+    opacity:0; transform:scale(.92) translateY(10px);
+    pointer-events:none;
+    transition:opacity .22s ease, transform .22s ease;
+  }
+  .panel.is-open{ opacity:1; transform:scale(1) translateY(0); pointer-events:auto; }
+
+  .panel__header{ background:linear-gradient(160deg, var(--ink-soft), var(--ink)); padding:18px 20px; display:flex; align-items:center; gap:12px; }
+  .avatar{ width:38px; height:38px; border-radius:50%; background:radial-gradient(circle at 35% 30%, #F0C878, var(--gold-deep)); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .avatar svg{ width:19px; height:19px; }
+  .header__text{ flex:1; min-width:0; }
+  .header__name{ font-family:'Fraunces',serif; font-weight:600; font-style:italic; color:#F6EFE2; font-size:16.5px; }
+  .header__status{ color:var(--text-muted-onink); font-size:12px; margin-top:2px; display:flex; align-items:center; gap:6px; }
+  .header__status::before{ content:''; width:6px; height:6px; border-radius:50%; background:var(--sage); box-shadow:0 0 0 2px rgba(79,101,82,0.35); }
+  .header__close{ width:28px; height:28px; border-radius:50%; border:none; display:flex; align-items:center; justify-content:center; color:var(--text-muted-onink); cursor:pointer; background:rgba(255,255,255,0.06); }
+  .header__close svg{ width:13px; height:13px; }
+
+  .panel__messages{ flex:1; padding:20px 16px; overflow-y:auto; display:flex; flex-direction:column; gap:14px; }
+  .msg{ max-width:82%; font-size:14.5px; line-height:1.5; padding:11px 15px; }
+  .msg--ai{ align-self:flex-start; background:var(--sand-bubble); color:var(--text-dark); border:1px solid #E7D9C0; border-radius:18px 18px 18px 0px; }
+  .msg--user{ align-self:flex-end; background:var(--ink); color:#F6EFE2; border-radius:18px 18px 0px 18px; }
+
+  .chips{ display:flex; flex-wrap:wrap; gap:8px; }
+  .chip{ font-size:12.5px; padding:7px 14px; border-radius:999px; border:1.3px solid var(--gold-deep); color:var(--gold-deep); background:transparent; font-weight:600; cursor:pointer; }
+  .chip:hover{ background:rgba(184,132,42,0.08); }
+
+  .panel__inputbar{ background:var(--ink); padding:14px 14px 16px; display:flex; align-items:center; gap:10px; }
+  .panel__input{ flex:1; border-radius:999px; background:#33312B; color:#F0EAE0; border:none; padding:12px 16px; font-family:'Manrope',sans-serif; font-size:14px; }
+  .panel__input::placeholder{ color:#8D8878; }
+  .panel__input:focus{ outline:2px solid var(--gold); outline-offset:2px; }
+  .send{ width:40px; height:40px; border-radius:50%; flex-shrink:0; border:none; background:var(--gold); display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .send svg{ width:17px; height:17px; }
+  .send:disabled{ opacity:.45; cursor:not-allowed; }
+  .panel__input:disabled{ opacity:.6; }
+
+  .msg--typing{ display:flex; align-items:center; gap:5px; padding:13px 16px; }
+  .msg--typing .dot{
+    width:6px; height:6px; border-radius:50%;
+    background:var(--gold-deep); opacity:.35;
+    animation:typingBounce 1.1s ease-in-out infinite;
+  }
+  .msg--typing .dot:nth-child(2){ animation-delay:.15s; }
+  .msg--typing .dot:nth-child(3){ animation-delay:.3s; }
+  @keyframes typingBounce{
+    0%,60%,100%{ transform:translateY(0); opacity:.35; }
+    30%{ transform:translateY(-4px); opacity:1; }
+  }
+  @media (prefers-reduced-motion:reduce){
+    .msg--typing .dot{ animation:none; opacity:.7; }
+  }
+
+  .bubble:focus-visible, .header__close:focus-visible, .chip:focus-visible, .send:focus-visible{ outline:2px solid var(--gold); outline-offset:2px; }
+
+  /* ---- NEW in step 6: message entrance + mobile sizing ---- */
+  .msg--enter{ opacity:0; transform:translateY(6px); transition:opacity .22s ease, transform .22s ease; }
+  .msg--enter-active{ opacity:1; transform:translateY(0); }
+  @media (prefers-reduced-motion:reduce){
+    .msg--enter{ transition:none; opacity:1; transform:none; }
+  }
+
+  @media (max-width:480px){
+    .panel{
+      width:100vw; height:100vh; max-width:100vw; max-height:100vh;
+      bottom:0; right:0; border-radius:0;
+    }
+    .bubble{ bottom:16px; right:16px; }
+    /* 16px prevents iOS Safari from auto-zooming in when the input gets focus */
+    .panel__input{ font-size:16px; }
+    .panel__inputbar{ padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
+  }
+</style>
+</head>
+<body>
+
+<div class="fake-page">
+  <h1>Valley Rock Tours</h1>
+  <p>(Placeholder page content — imagine the real homepage here.)</p>
+</div>
+
+<button class="bubble" id="bubbleBtn" aria-label="Open Safari Consultant chat" aria-expanded="false">
+  <svg viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 1 3.2 6.4L4 19.5l1.1-3A7.96 7.96 0 0 1 4 12Z" stroke="#D9A441" stroke-width="1.6" stroke-linejoin="round"/><circle cx="9" cy="12" r="1" fill="#D9A441"/><circle cx="12" cy="12" r="1" fill="#D9A441"/><circle cx="15" cy="12" r="1" fill="#D9A441"/></svg>
+</button>
+
+<div class="panel" id="panel" role="dialog" aria-label="Valley Rock Safari Consultant chat" aria-hidden="true">
+  <div class="panel__header">
+    <div class="avatar">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M4 16 9 8l4 5 3-4 4 7" stroke="#1C1B18" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="header__text">
+      <div class="header__name">Valley Rock Safari Consultant</div>
+      <div class="header__status">Online now</div>
+    </div>
+    <button class="header__close" id="closeBtn" aria-label="Close chat">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M5 5 19 19M19 5 5 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+
+  <div class="panel__messages" id="messages"></div>
+
+  <div class="panel__inputbar">
+    <input class="panel__input" id="input" placeholder="Tell me about your dream safari..." aria-label="Message the Safari Consultant" />
+    <button class="send" id="sendBtn" aria-label="Send message">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M4 12h15M13 6l6 6-6 6" stroke="#1C1B18" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+  const bubble   = document.getElementById('bubbleBtn');
+  const panel    = document.getElementById('panel');
+  const closeBtn = document.getElementById('closeBtn');
+  const input    = document.getElementById('input');
+  const sendBtn  = document.getElementById('sendBtn');
+  const messagesEl = document.getElementById('messages');
+
+  // ---- open/close (from step 2) ----
+  function openPanel(){
+    bubble.classList.add('is-hidden');
+    panel.classList.add('is-open');
+    bubble.setAttribute('aria-expanded', 'true');
+    panel.setAttribute('aria-hidden', 'false');
+    input.focus();
+  }
+  function closePanel(){
+    panel.classList.remove('is-open');
+    bubble.classList.remove('is-hidden');
+    bubble.setAttribute('aria-expanded', 'false');
+    panel.setAttribute('aria-hidden', 'true');
+    bubble.focus();
+  }
+  bubble.addEventListener('click', openPanel);
+  closeBtn.addEventListener('click', closePanel);
+
+  // Keeps Tab/Shift+Tab cycling inside the panel while it's open, instead of
+  // escaping out onto the real page behind it (invisible in this isolated
+  // demo since there's nothing focusable behind it here, but essential once
+  // this sits on top of a real page full of nav links and other buttons).
+  // Recomputed on every Tab press rather than cached once, since the chips
+  // row can be removed mid-conversation and shouldn't leave a stale trap.
+  function getFocusableElements(){
+    return Array.from(panel.querySelectorAll(
+      'button, input, [href], [tabindex]:not([tabindex="-1"])'
+    )).filter(el => !el.disabled && el.offsetParent !== null);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (!panel.classList.contains('is-open')) return;
+
+    if (e.key === 'Escape') {
+      closePanel();
+      return;
+    }
+
+    if (e.key === 'Tab') {
+      const focusable = getFocusableElements();
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  });
+
+  // ---- Where Wallace's backend actually lives ----
+  // Now pointing at the live Railway deployment instead of localhost.
+  const BACKEND_URL = 'https://valley-rock-ai-backend-production.up.railway.app';
+
+  // ---- message state (from step 3) ----
+  // This array is the single source of truth for the conversation, and its
+  // shape is exactly the "conversation_history" we send to Wallace's endpoint.
+  let messages = [];
+
+  const starterChips = ['Wildlife & Big Five', 'Honeymoon', 'Family trip'];
+
+  // ---- CHANGED in step 6: append-only instead of clear-and-rebuild ----
+  // Steps 3-5 wiped the whole message list and redrew it from scratch on every
+  // change. That was simple and fine for getting things working, but it means
+  // an entrance animation would replay on EVERY old message every time a new
+  // one arrives — which looks broken. Appending just the one new message fixes
+  // that, and is also just better practice for a chat interface generally
+  // (less work for the browser, and scroll position stays predictable).
+  function appendMessage(msg){
+    messages.push(msg);
+
+    const div = document.createElement('div');
+    div.className = 'msg ' + (msg.role === 'user' ? 'msg--user' : 'msg--ai') + ' msg--enter';
+    div.textContent = msg.content; // textContent, never innerHTML, for real content
+    messagesEl.appendChild(div);
+
+    // add the class on the next frame so the transition actually plays
+    requestAnimationFrame(() => div.classList.add('msg--enter-active'));
+
+    messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
+  }
+
+  function showStarterChips(){
+    const chipsRow = document.createElement('div');
+    chipsRow.className = 'chips';
+    chipsRow.id = 'starterChips';
+    starterChips.forEach(label => {
+      const btn = document.createElement('button');
+      btn.className = 'chip';
+      btn.textContent = label;
+      chipsRow.appendChild(btn);
+    });
+    messagesEl.appendChild(chipsRow);
+  }
+
+  // ---- typing indicator + a "waiting" lock (from step 5) ----
+  let isWaiting = false;
+
+  function updateSendButtonState(){
+    sendBtn.disabled = isWaiting || input.value.trim().length === 0;
+  }
+
+  function setWaiting(waiting){
+    isWaiting = waiting;
+    input.disabled = waiting;
+    updateSendButtonState();
+  }
+
+  function showTyping(){
+    const typingEl = document.createElement('div');
+    typingEl.className = 'msg msg--ai msg--typing';
+    typingEl.id = 'typingIndicator';
+    // Static markup we wrote ourselves (no user data involved) — innerHTML is fine here.
+    typingEl.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+    messagesEl.appendChild(typingEl);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function hideTyping(){
+    const el = document.getElementById('typingIndicator');
+    if (el) el.remove();
+  }
+
+  function sendMessage(text){
+    if (isWaiting) return; // ignore sends while a reply is already in flight
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    const historyForRequest = messages.map(m => ({ role: m.role, content: m.content }));
+
+    // The suggestion chips only make sense before the conversation has
+    // started — once a real message is sent, they need to disappear.
+    // (Bug found on review: with append-only rendering, nothing removed
+    // them automatically the way the old rebuild-every-time render() did.)
+    const chipsEl = document.getElementById('starterChips');
+    if (chipsEl) chipsEl.remove();
+
+    appendMessage({ role: 'user', content: trimmed });
+    input.value = '';
+    updateSendButtonState();
+
+    setWaiting(true);
+    showTyping();
+
+    fetch(BACKEND_URL + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: trimmed,
+        conversation_history: historyForRequest
+      })
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('Server responded with status ' + res.status);
+        return res.json();
+      })
+      .then(data => {
+        hideTyping();
+        appendMessage({ role: 'assistant', content: data.reply });
+        setWaiting(false);
+        input.focus();
+      })
+      .catch(err => {
+        console.error('Chat request failed:', err);
+        hideTyping();
+        appendMessage({
+          role: 'assistant',
+          content: "Sorry, I'm having trouble connecting right now. Please try again, or reach us on WhatsApp."
+        });
+        setWaiting(false);
+        input.focus();
+      });
+  }
+
+  sendBtn.addEventListener('click', () => sendMessage(input.value));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendMessage(input.value);
+  });
+  input.addEventListener('input', updateSendButtonState);
+
+  // event delegation still works fine here — it doesn't care that chips
+  // are now added once up front rather than recreated on every render
+  messagesEl.addEventListener('click', (e) => {
+    if (e.target.classList.contains('chip')) sendMessage(e.target.textContent);
+  });
+
+  // ---- initial paint ----
+  appendMessage({ role: 'assistant', content: "Hi! I'm your Valley Rock Safari Consultant. Tell me a little about the trip you're dreaming of — I'll help you find the perfect safari." });
+  showStarterChips();
+  updateSendButtonState();
+</script>
+
+</body>
+</html>
